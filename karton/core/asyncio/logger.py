@@ -1,31 +1,17 @@
 """
 asyncio implementation of KartonLogHandler
 """
-
 import asyncio
 import logging
 import platform
 from typing import Any, Dict, Optional, Tuple
-
 from karton.core.logger import LogLineFormatterMixin
-
 from .backend import KartonAsyncBackend
-
 HOSTNAME = platform.node()
-
 QueuedRecord = Optional[Tuple[Dict[str, Any], str]]
 
-
-async def async_log_consumer(
-    queue: asyncio.Queue[QueuedRecord], backend: KartonAsyncBackend, channel: str
-) -> None:
-    while True:
-        item = await queue.get()
-        if not item:
-            break
-        log_line, levelname = item
-        await backend.produce_log(log_line, logger_name=channel, level=levelname)
-
+async def async_log_consumer(queue: asyncio.Queue[QueuedRecord], backend: KartonAsyncBackend, channel: str) -> None:
+    pass
 
 class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
     """
@@ -40,18 +26,10 @@ class KartonAsyncLogHandler(logging.Handler, LogLineFormatterMixin):
         self._channel = channel
 
     def emit(self, record: logging.LogRecord) -> None:
-        log_line = self.prepare_log_line(record)
-        self._queue.put_nowait((log_line, record.levelname))
+        pass
 
     def start_consuming(self):
-        if self._consumer is not None:
-            raise RuntimeError("Consumer already started")
-        self._consumer = asyncio.create_task(
-            async_log_consumer(self._queue, self._backend, self._channel)
-        )
+        pass
 
     async def stop_consuming(self):
-        if self._consumer is None:
-            raise RuntimeError("Consumer is not started")
-        self._queue.put_nowait(None)  # Signal that queue is finished
-        await self._consumer
+        pass

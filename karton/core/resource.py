@@ -7,10 +7,8 @@ import uuid
 import zipfile
 from io import BytesIO
 from typing import IO, TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Union, cast
-
 if TYPE_CHECKING:
     from .backend import KartonBackend
-
 
 class ResourceBase(object):
     """
@@ -28,52 +26,32 @@ class ResourceBase(object):
     :param _uid: Alternative S3 resource id
     :param _flags: Resource flags
     """
+    DIRECTORY_FLAG = 'Directory'
 
-    DIRECTORY_FLAG = "Directory"
-
-    def __init__(
-        self,
-        name: str,
-        content: Optional[Union[str, bytes]] = None,
-        path: Optional[str] = None,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        sha256: Optional[str] = None,
-        fd: Optional[IO[bytes]] = None,
-        _uid: Optional[str] = None,
-        _size: Optional[int] = None,
-        _flags: Optional[List[str]] = None,
-    ) -> None:
+    def __init__(self, name: str, content: Optional[Union[str, bytes]]=None, path: Optional[str]=None, bucket: Optional[str]=None, metadata: Optional[Dict[str, Any]]=None, sha256: Optional[str]=None, fd: Optional[IO[bytes]]=None, _uid: Optional[str]=None, _size: Optional[int]=None, _flags: Optional[List[str]]=None) -> None:
         self.name = name
         self.bucket = bucket
         self.metadata = metadata or {}
-        # the sha256 identifier can be passed as an argument or inside the metadata
-        sha256 = sha256 or self.metadata.get("sha256")
-
+        sha256 = sha256 or self.metadata.get('sha256')
         calculate_hash = sha256 is None
-
         self._content: Optional[bytes] = None
-
         if content and path:
             raise ValueError("Can't set both path and content for resource")
         if path:
             if not os.path.isfile(path):
-                raise IOError(
-                    "Path {path} doesn't exist or is not a file".format(path=path)
-                )
+                raise IOError("Path {path} doesn't exist or is not a file".format(path=path))
             if calculate_hash:
                 sha256_hash = hashlib.sha256()
-                with open(path, "rb") as f:
-                    for byte_block in iter(lambda: f.read(4096), b""):
+                with open(path, 'rb') as f:
+                    for byte_block in iter(lambda: f.read(4096), b''):
                         sha256_hash.update(byte_block)
                 sha256 = sha256_hash.hexdigest()
         elif fd is not None:
             if calculate_hash:
-                # we need to calculate the whole hash and return pos as it was
                 sha256_hash = hashlib.sha256()
                 last_position = fd.tell()
                 fd.seek(0)
-                for byte_block in iter(lambda: fd.read(4096), b""):
+                for byte_block in iter(lambda: fd.read(4096), b''):
                     sha256_hash.update(byte_block)
                 sha256 = sha256_hash.hexdigest()
                 fd.seek(last_position)
@@ -83,17 +61,13 @@ class ResourceBase(object):
             elif isinstance(content, bytes):
                 self._content = content
             else:
-                raise TypeError("Content can be bytes or str only")
+                raise TypeError('Content can be bytes or str only')
             if calculate_hash and self._content:
                 sha256 = hashlib.sha256(self._content).hexdigest()
-
-        # Empty Resource is possible here (e.g. RemoteResource)
-        self.metadata["sha256"] = sha256
-
+        self.metadata['sha256'] = sha256
         self._uid = _uid or str(uuid.uuid4())
         self._path = path
         self._size = _size
-        # Flags needed by 3.x.x Karton services
         self._flags = _flags or []
 
     @property
@@ -103,7 +77,7 @@ class ResourceBase(object):
 
         :return: Resource identifier
         """
-        return self._uid
+        pass
 
     @property
     def content(self) -> bytes:
@@ -121,12 +95,7 @@ class ResourceBase(object):
 
         :return: Resource size
         """
-        if self._size is None:
-            if self._path:
-                self._size = os.path.getsize(self._path)
-            elif self._content:
-                self._size = len(self._content)
-        return cast(int, self._size)
+        pass
 
     @property
     def sha256(self) -> Optional[str]:
@@ -135,49 +104,17 @@ class ResourceBase(object):
 
         :return: Hexencoded resource SHA256 hash
         """
-        return self.metadata.get("sha256")
+        pass
 
     def to_dict(self) -> Dict[str, Any]:
-        # Internal serialization method
-        return {
-            "uid": self.uid,
-            "name": self.name,
-            "bucket": self.bucket,
-            "size": self.size,
-            "metadata": self.metadata,
-            "flags": self._flags,
-            "sha256": self.sha256,
-        }
-
+        pass
 
 class LocalResourceBase(ResourceBase):
-    def __init__(
-        self,
-        name: str,
-        content: Optional[Union[str, bytes]] = None,
-        path: Optional[str] = None,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        sha256: Optional[str] = None,
-        fd: Optional[IO[bytes]] = None,
-        _flags: Optional[List[str]] = None,
-        _close_fd: bool = False,
-    ) -> None:
-        if len(list(filter(None, [path, content, fd]))) != 1:
-            raise ValueError("You must exclusively provide a path, content or fd")
 
-        super().__init__(
-            name,
-            content=content,
-            path=path,
-            bucket=bucket,
-            metadata=metadata,
-            sha256=sha256,
-            fd=fd,
-            _uid=uid,
-            _flags=_flags,
-        )
+    def __init__(self, name: str, content: Optional[Union[str, bytes]]=None, path: Optional[str]=None, bucket: Optional[str]=None, metadata: Optional[Dict[str, Any]]=None, uid: Optional[str]=None, sha256: Optional[str]=None, fd: Optional[IO[bytes]]=None, _flags: Optional[List[str]]=None, _close_fd: bool=False) -> None:
+        if len(list(filter(None, [path, content, fd]))) != 1:
+            raise ValueError('You must exclusively provide a path, content or fd')
+        super().__init__(name, content=content, path=path, bucket=bucket, metadata=metadata, sha256=sha256, fd=fd, _uid=uid, _flags=_flags)
         self.fd = fd
         self._close_fd = _close_fd
 
@@ -188,13 +125,7 @@ class LocalResourceBase(ResourceBase):
 
         :return: Content bytes
         """
-        if self._content is None:
-            if self._path is not None:
-                with open(self._path, "rb") as local_file:
-                    self._content = local_file.read()
-            elif self.fd is not None:
-                self._content = self.fd.read()
-        return cast(bytes, self._content)
+        pass
 
     @property
     def size(self) -> int:
@@ -203,24 +134,10 @@ class LocalResourceBase(ResourceBase):
 
         :return: Resource size
         """
-        if self._size is None and self.fd is not None:
-            current_pos = self.fd.tell()
-            self.fd.seek(0, os.SEEK_END)
-            self._size = self.fd.tell()
-            self.fd.seek(current_pos, os.SEEK_SET)
-        return super().size
+        pass
 
     @classmethod
-    def from_directory(
-        cls,
-        name: str,
-        directory_path: str,
-        compression: int = zipfile.ZIP_DEFLATED,
-        in_memory: bool = False,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-    ) -> "LocalResourceBase":
+    def from_directory(cls, name: str, directory_path: str, compression: int=zipfile.ZIP_DEFLATED, in_memory: bool=False, bucket: Optional[str]=None, metadata: Optional[Dict[str, Any]]=None, uid: Optional[str]=None) -> 'LocalResourceBase':
         """
         Resource extension, allowing to pass whole directory as a zipped resource.
 
@@ -235,49 +152,13 @@ class LocalResourceBase(ResourceBase):
         :param name: Name of the resource (e.g. name of file)
         :param directory_path: Path of the resource directory
         :param compression: Compression level (default is zipfile.ZIP_DEFLATED)
-        :param in_memory: Don't create temporary file and make in-memory zip file \
-                          (default: False)
+        :param in_memory: Don't create temporary file and make in-memory zip file                           (default: False)
         :param bucket: Alternative S3 bucket for resource
         :param metadata: Resource metadata
         :param uid: Alternative S3 resource id
         :return: :class:`LocalResource` instance with zipped contents
         """
-        out_stream: IO[bytes] = BytesIO() if in_memory else tempfile.TemporaryFile()
-
-        # Recursively zips all files in directory_path keeping relative paths
-        # File is zipped into provided out_stream
-        with zipfile.ZipFile(out_stream, "w", compression=compression) as zipf:
-            for root, dirs, files in os.walk(directory_path):
-                for filename in files:
-                    abs_path = os.path.join(root, filename)
-                    zipf.write(abs_path, os.path.relpath(abs_path, directory_path))
-        # Ensure out_stream is not closed and seeked to the first byte
-        assert not out_stream.closed
-        out_stream.seek(0, os.SEEK_SET)
-        # Flag is required by Karton 3.x.x services to recognize that resource
-        # as DirectoryResource
-        flags = [ResourceBase.DIRECTORY_FLAG]
-
-        if in_memory:
-            return cls(
-                name,
-                content=cast(BytesIO, out_stream).getvalue(),
-                bucket=bucket,
-                metadata=metadata,
-                uid=uid,
-                _flags=flags,
-            )
-        else:
-            return cls(
-                name,
-                fd=out_stream,
-                bucket=bucket,
-                metadata=metadata,
-                uid=uid,
-                _flags=flags,
-                _close_fd=True,
-            )
-
+        pass
 
 class LocalResource(LocalResourceBase):
     """
@@ -307,55 +188,24 @@ class LocalResource(LocalResourceBase):
     :param _close_fd: Close file descriptor after upload (default: False)
     """
 
-    def _upload(self, backend: "KartonBackend") -> None:
+    def _upload(self, backend: 'KartonBackend') -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
 
         :meta private:
         """
+        pass
 
-        # Note: never transform resource into Remote
-        # Multiple task dispatching with same local, in that case resource
-        # can be deleted between tasks.
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be uploaded because its bucket is not set"
-            )
-
-        if self._content:
-            # Upload contents
-            backend.upload_object(self.bucket, self.uid, self._content)
-        elif self.fd:
-            if self.fd.tell() != 0:
-                raise RuntimeError(
-                    f"Resource object can't be uploaded: "
-                    f"file descriptor must point at first byte "
-                    f"(fd.tell = {self.fd.tell()})"
-                )
-            # Upload contents from fd
-            backend.upload_object(self.bucket, self.uid, self.fd)
-            # If file descriptor is managed by Resource, close it after upload
-            if self._close_fd:
-                self.fd.close()
-        elif self._path:
-            # Upload file provided by path
-            backend.upload_object_from_file(self.bucket, self.uid, self._path)
-
-    def upload(self, backend: "KartonBackend") -> None:
+    def upload(self, backend: 'KartonBackend') -> None:
         """Internal function for uploading resources
 
         :param backend: KartonBackend to use while uploading the resource
 
         :meta private:
         """
-        if not self._content and not self._path and not self.fd:
-            raise RuntimeError("Can't upload resource without content")
-        self._upload(backend)
-
-
+        pass
 Resource = LocalResource
-
 
 class RemoteResource(ResourceBase):
     """
@@ -375,26 +225,8 @@ class RemoteResource(ResourceBase):
     :param _flags: Resource flags
     """
 
-    def __init__(
-        self,
-        name: str,
-        bucket: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        uid: Optional[str] = None,
-        size: Optional[int] = None,
-        backend: Optional["KartonBackend"] = None,
-        sha256: Optional[str] = None,
-        _flags: Optional[List[str]] = None,
-    ) -> None:
-        super(RemoteResource, self).__init__(
-            name,
-            bucket=bucket,
-            metadata=metadata,
-            sha256=sha256,
-            _uid=uid,
-            _size=size,
-            _flags=_flags,
-        )
+    def __init__(self, name: str, bucket: Optional[str]=None, metadata: Optional[Dict[str, Any]]=None, uid: Optional[str]=None, size: Optional[int]=None, backend: Optional['KartonBackend']=None, sha256: Optional[str]=None, _flags: Optional[List[str]]=None) -> None:
+        super(RemoteResource, self).__init__(name, bucket=bucket, metadata=metadata, sha256=sha256, _uid=uid, _size=size, _flags=_flags)
         self.backend = backend
 
     def loaded(self) -> bool:
@@ -403,12 +235,10 @@ class RemoteResource(ResourceBase):
 
         :return: Flag indicating if the resource is loaded or not
         """
-        return self._content is not None
+        pass
 
     @classmethod
-    def from_dict(
-        cls, dict: Dict[str, Any], backend: Optional["KartonBackend"]
-    ) -> "RemoteResource":
+    def from_dict(cls, dict: Dict[str, Any], backend: Optional['KartonBackend']) -> 'RemoteResource':
         """
         Internal deserialization method for remote resources
 
@@ -418,20 +248,7 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        # Backwards compatibility
-        metadata = dict.get("metadata", {})
-        if "sha256" in dict:
-            metadata["sha256"] = dict["sha256"]
-
-        return cls(
-            name=dict["name"],
-            metadata=metadata,
-            bucket=dict["bucket"],
-            uid=dict["uid"],
-            size=dict.get("size"),  # Backwards compatibility (2.x.x)
-            backend=backend,
-            _flags=dict.get("flags"),  # Backwards compatibility (3.x.x)
-        )
+        pass
 
     @property
     def content(self) -> bytes:
@@ -440,15 +257,13 @@ class RemoteResource(ResourceBase):
 
         :return: Content bytes
         """
-        if self._content is None:
-            return self.download()
-        return self._content
+        pass
 
     def unload(self) -> None:
         """
         Unloads resource object from memory
         """
-        self._content = None
+        pass
 
     def remove(self) -> None:
         """
@@ -456,16 +271,7 @@ class RemoteResource(ResourceBase):
 
         :meta private:
         """
-        if self.backend is None:
-            raise RuntimeError(
-                "Resource object can't be removed because it's not bound to the backend"
-            )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be removed because its bucket is not set"
-            )
-
-        self.backend.remove_object(self.bucket, self.uid)
+        pass
 
     def download(self) -> bytes:
         """
@@ -483,20 +289,7 @@ class RemoteResource(ResourceBase):
 
         :return: Downloaded content bytes
         """
-        if self.backend is None:
-            raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
-            )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
-
-        self._content = self.backend.download_object(self.bucket, self.uid)
-        return self._content
+        pass
 
     def download_to_file(self, path: str) -> None:
         """
@@ -513,19 +306,7 @@ class RemoteResource(ResourceBase):
 
         :param path: Path to download the resource into
         """
-        if self.backend is None:
-            raise RuntimeError(
-                (
-                    "Resource object can't be downloaded because it's not bound to "
-                    "the backend"
-                )
-            )
-        if self.bucket is None:
-            raise RuntimeError(
-                "Resource object can't be downloaded because its bucket is not set"
-            )
-
-        self.backend.download_object_to_file(self.bucket, self.uid, path)
+        pass
 
     @contextlib.contextmanager
     def download_temporary_file(self, suffix=None) -> Iterator[IO[bytes]]:
@@ -544,18 +325,7 @@ class RemoteResource(ResourceBase):
 
         :return: ContextManager with the temporary file
         """
-        # That tempfile-fu is necessary because minio.fget_object removes file
-        # under provided path and renames its own part-file with downloaded content
-        # under previously deleted path
-        # Weird move, but ok...
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        tmp.close()
-        try:
-            self.download_to_file(tmp.name)
-            with open(tmp.name, "rb") as f:
-                yield f
-        finally:
-            os.remove(tmp.name)
+        pass
 
     @contextlib.contextmanager
     def zip_file(self) -> Iterator[zipfile.ZipFile]:
@@ -589,11 +359,7 @@ class RemoteResource(ResourceBase):
 
         :return: ContextManager with zipfile
         """
-        if self._content:
-            yield zipfile.ZipFile(BytesIO(self._content))
-        else:
-            with self.download_temporary_file() as f:
-                yield zipfile.ZipFile(f)
+        pass
 
     def extract_to_directory(self, path: str) -> None:
         """
@@ -606,8 +372,7 @@ class RemoteResource(ResourceBase):
 
         :param path: Directory path where the resource should be unpacked
         """
-        with self.zip_file() as zf:
-            zf.extractall(path)
+        pass
 
     @contextlib.contextmanager
     def extract_temporary(self) -> Iterator[str]:
@@ -631,9 +396,4 @@ class RemoteResource(ResourceBase):
 
         :return: ContextManager with the temporary directory
         """
-        tmpdir = tempfile.mkdtemp()
-        try:
-            self.extract_to_directory(tmpdir)
-            yield tmpdir
-        finally:
-            shutil.rmtree(tmpdir)
+        pass
